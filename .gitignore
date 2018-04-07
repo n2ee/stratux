@@ -42,3 +42,4 @@ test/uatsummary
 
 *.go~
 *.js~
+.DS_Store
