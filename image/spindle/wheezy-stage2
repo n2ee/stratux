@@ -171,8 +171,8 @@ EOF1
 
 configure_hostname() {
   onvm_chroot sh -l -e - <<EOF
-echo raspberrypi > /etc/hostname
-printf "127.0.1.1\traspberrypi\n" >> /etc/hosts
+echo stratux > /etc/hostname
+printf "127.0.1.1\tstratux\n" >> /etc/hosts
 EOF
 }
 
