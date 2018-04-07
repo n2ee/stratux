@@ -22,6 +22,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -1200,11 +1201,35 @@ func addSingleSystemErrorf(ident string, format string, a ...interface{}) {
 	systemErrsMutex.Unlock()
 }
 
+func setFs(rw bool) {
+
+	if rw {
+		fscmd := "/usr/bin/rw"
+	} else {
+		fsCmd := "/usr/bin/ro"
+	}
+
+	err := exec.Command(fsCmd).Run()
+	if err != nil {
+		log.Printf("Error executing %s: %s\n", fsCmd, err)
+		return err
+	}
+
+	return nil
+}
+
 func saveSettings() {
 	fd, err := os.OpenFile(configLocation, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(0644))
 	if err != nil {
-		addSingleSystemErrorf("save-settings", "can't save settings %s: %s", configLocation, err.Error())
+		if err.Err == syscall.EROFS {
+			// read-only filesystem, let's make it writable, and try again
+			setFs(true)
+			defer  setFs(false)
+			fd, err := os.OpenFile(configLocation, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(0644))
+			if err != nil {
+				addSingleSystemErrorf("save-settings", "can't save settings %s: %s", configLocation, err.Error())
 		return
+		}
 	}
 	defer fd.Close()
 	jsonSettings, _ := json.Marshal(&globalSettings)
