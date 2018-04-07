@@ -56,13 +56,17 @@ function GPSCtrl($rootScope, $scope, $state, $http, $interval) {
 
     function sizeMap() {
         var width = 0;
-        var el = document.getElementById("map_display").parentElement;
-        width = el.offsetWidth; // was  (- (2 * el.offsetLeft))
-        if (width !== display_area_size) {
-            display_area_size = width;
-            $scope.map_width = width;
-            $scope.map_height = width;
-        }
+        var el = document.getElementById("map_display");
+
+	if (el != null) {
+            el = el.parentElement;
+            width = el.offsetWidth; // was  (- (2 * el.offsetLeft))
+            if (width !== display_area_size) {
+                display_area_size = width;
+                $scope.map_width = width;
+                $scope.map_height = width;
+            }
+	}
         return width;
     }
 
