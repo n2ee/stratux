@@ -195,10 +195,13 @@ func initGPSSerial() bool {
 	isSirfIV := bool(false)
 	globalStatus.GPS_detected_type = 0 // reset detected type on each initialization
 
-	if _, err := os.Stat("/dev/ublox8"); err == nil { // u-blox 8 (RY83xAI over USB).
+	if _, err := os.Stat("/dev/ublox9"); err == nil { // u-blox 8 (RY83xAI over USB).
+		device = "/dev/ublox9"
+		globalStatus.GPS_detected_type = GPS_TYPE_UBX9
+	} else if _, err := os.Stat("/dev/ublox8"); err == nil { // u-blox 8 (RY83xAI or GPYes 2.0).
 		device = "/dev/ublox8"
 		globalStatus.GPS_detected_type = GPS_TYPE_UBX8
-	} else if _, err := os.Stat("/dev/ublox7"); err == nil { // u-blox 7 (VK-172, VK-162 Rev 2, RY725AI over USB).
+	} else if _, err := os.Stat("/dev/ublox7"); err == nil { // u-blox 7 (VK-172, VK-162 Rev 2, GPYes, RY725AI over USB).
 		device = "/dev/ublox7"
 		globalStatus.GPS_detected_type = GPS_TYPE_UBX7
 	} else if _, err := os.Stat("/dev/ublox6"); err == nil { // u-blox 6 (VK-162 Rev 1).
@@ -214,7 +217,9 @@ func initGPSSerial() bool {
 		device = "/dev/ttyAMA0"
 		globalStatus.GPS_detected_type = GPS_TYPE_UART
 	} else {
-		log.Printf("No suitable device found.\n")
+		if globalSettings.DEBUG {
+			log.Printf("No GPS device found.\n")
+		}
 		return false
 	}
 	if globalSettings.DEBUG {
@@ -303,8 +308,10 @@ func initGPSSerial() bool {
 		glonass := []byte{0x06, 0x04, 0x0E, 0x00, 0x00, 0x00, 0x01, 0x01} // this disables GLONASS
 		galileo := []byte{0x02, 0x04, 0x08, 0x00, 0x00, 0x00, 0x01, 0x01} // this disables Galileo
 
-		if (globalStatus.GPS_detected_type == GPS_TYPE_UBX8) || (globalStatus.GPS_detected_type == GPS_TYPE_UART) { // assume that any GPS connected to serial GPIO is ublox8 (RY835/6AI)
-			//log.Printf("UBX8 device detected on USB, or GPS serial connection in use. Attempting GLONASS and Galelio configuration.\n")
+		if (globalStatus.GPS_detected_type == GPS_TYPE_UBX8) || (globalStatus.GPS_detected_type == GPS_TYPE_UBX9) || (globalStatus.GPS_detected_type == GPS_TYPE_UART) { // assume that any GPS connected to serial GPIO is ublox8 (RY835/6AI)
+			if globalSettings.DEBUG {
+				log.Printf("UBX8/9/unknown device detected on USB, or GPS serial connection in use. Attempting GLONASS and Galelio configuration.\n")
+			}
 			glonass = []byte{0x06, 0x08, 0x0E, 0x00, 0x01, 0x00, 0x01, 0x01} // this enables GLONASS with 8-14 tracking channels
 			galileo = []byte{0x02, 0x04, 0x08, 0x00, 0x01, 0x00, 0x01, 0x01} // this enables Galileo with 4-8 tracking channels
 			updatespeed = []byte{0x06, 0x00, 0xF4, 0x01, 0x01, 0x00}         // Nav speed 2Hz
@@ -1849,6 +1856,71 @@ func makeFFAHRSSimReport() {
 	sendMsg([]byte(s), NETWORK_AHRS_FFSIM, false)
 }
 
+/*
+
+	ForeFlight "AHRS Message".
+
+	Sends AHRS information to ForeFlight.
+
+*/
+
+func makeFFAHRSMessage() {
+	msg := make([]byte, 12)
+	msg[0] = 0x65 // Message type "ForeFlight".
+	msg[1] = 0x01 // AHRS message identifier.
+
+	// Values if invalid
+	pitch := int16(0x7FFF)
+	roll := int16(0x7FFF)
+	hdg := uint16(0xFFFF)
+	ias := uint16(0xFFFF)
+	tas := uint16(0xFFFF)
+
+	if isAHRSValid() {
+		if !isAHRSInvalidValue(mySituation.AHRSPitch) {
+			pitch = roundToInt16(mySituation.AHRSPitch * 10)
+		}
+		if !isAHRSInvalidValue(mySituation.AHRSRoll) {
+			roll = roundToInt16(mySituation.AHRSRoll * 10)
+		}
+	}
+
+	// Roll.
+	msg[2] = byte((roll >> 8) & 0xFF)
+	msg[3] = byte(roll & 0xFF)
+
+	// Pitch.
+	msg[4] = byte((pitch >> 8) & 0xFF)
+	msg[5] = byte(pitch & 0xFF)
+
+	// Heading.
+	msg[6] = byte((hdg >> 8) & 0xFF)
+	msg[7] = byte(hdg & 0xFF)
+
+	// Indicated Airspeed.
+	msg[8] = byte((ias >> 8) & 0xFF)
+	msg[9] = byte(ias & 0xFF)
+
+	// True Airspeed.
+	msg[10] = byte((tas >> 8) & 0xFF)
+	msg[11] = byte(tas & 0xFF)
+
+	sendMsg(prepareMessage(msg), NETWORK_AHRS_GDL90, false)
+}
+
+/*
+	ffAttitudeSender()
+	 Send AHRS message in FF format every 200ms.
+*/
+
+func ffAttitudeSender() {
+	ticker := time.NewTicker(200 * time.Millisecond)
+	for {
+		<-ticker.C
+		makeFFAHRSMessage()
+	}
+}
+
 func makeAHRSGDL90Report() {
 	msg := make([]byte, 24)
 	msg[0] = 0x4c
@@ -1867,17 +1939,14 @@ func makeAHRSGDL90Report() {
 	palt := uint16(0xFFFF)
 	vs := int16(0x7FFF)
 	if isAHRSValid() {
-		// AHRS invalid magic number is ahrs.Invalid.
 		if !isAHRSInvalidValue(mySituation.AHRSPitch) {
 			pitch = roundToInt16(mySituation.AHRSPitch * 10)
 		}
 		if !isAHRSInvalidValue(mySituation.AHRSRoll) {
 			roll = roundToInt16(mySituation.AHRSRoll * 10)
 		}
-		if isAHRSInvalidValue(mySituation.AHRSGyroHeading) {
-			hdg = roundToInt16(mySituation.AHRSGyroHeading * 10) // TODO westphae: switch to AHRSMagHeading?
-		} else {
-			hdg = roundToInt16(float64(mySituation.GPSTrueCourse))
+		if !isAHRSInvalidValue(mySituation.AHRSGyroHeading) {
+			hdg = roundToInt16(mySituation.AHRSGyroHeading * 10)
 		}
 		if !isAHRSInvalidValue(mySituation.AHRSSlipSkid) {
 			slip_skid = roundToInt16(-mySituation.AHRSSlipSkid * 10)
@@ -2038,7 +2107,9 @@ func isGPSClockValid() bool {
 }
 
 func isAHRSValid() bool {
-	return stratuxClock.Since(mySituation.AHRSLastAttitudeTime) < 1*time.Second // If attitude information gets to be over 1 second old, declare invalid.
+	// If attitude information gets to be over 1 second old, declare invalid.
+	// If no GPS then we won't use or send attitude information.
+	return (globalSettings.DeveloperMode || isGPSValid()) && stratuxClock.Since(mySituation.AHRSLastAttitudeTime) < 1*time.Second
 }
 
 func isTempPressValid() bool {
@@ -2049,6 +2120,7 @@ func pollGPS() {
 	readyToInitGPS = true //TODO: Implement more robust method (channel control) to kill zombie serial readers
 	timer := time.NewTicker(4 * time.Second)
 	go gpsAttitudeSender()
+	go ffAttitudeSender()
 	for {
 		<-timer.C
 		// GPS enabled, was not connected previously?

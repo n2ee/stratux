@@ -7,13 +7,14 @@
 RTL-SDR UAT tools
 
 
-Use with Raspberry Pi 3.
+Use with Raspberry Pi 3B. Do **not** use with the Raspberry Pi 3 _**B+**_.
 
 Raspberry Pi 2 with the Edimax EW-7811Un Wi-Fi dongle is supported but not recommended for new builds.
 
 Tested and works well with most common R820T and R820T2 RTL-SDR devices.
 
 Apps with stratux recognition/support:
+* ForeFlight 10+ - weather, traffic, AHRS.
 * Seattle Avionics FlyQ EFB 2.1.1+.
 * AvNav EFB 2.0.0+.
 * Naviator.
@@ -23,15 +24,12 @@ Apps with stratux recognition/support:
 * AvPlan EFB.
 * iFly GPS 9.4+.
 * DroidEFB 2.1.1+.
+* kwikEFIS
 
 Tested weather/traffic displays:
-* ForeFlight 7+ - weather, traffic. AHRS not functional.
 * Avare
 
 Other EFBs? See the [app vendor integration guide](https://github.com/cyoung/stratux/blob/master/notes/app-vendor-integration.md).
-
-Dangerzone builds (AHRS display):
-* ForeFlight 7+ - weather, traffic, AHRS.
 
 Questions?  [See the FAQ](https://github.com/cyoung/stratux/wiki/FAQ)
 
@@ -46,6 +44,8 @@ Jet tests (high gain antennas):
 * Dassault Falcon 20
 * Embraer ERJ 145
 * Cessna Citation 501
+* Citation Sovereign+
 * Lear 35
 * Rockwell B-1b
 * Boeing C-17
+* Gulfstream G450

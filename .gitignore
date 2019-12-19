@@ -40,6 +40,11 @@ test/uat_read
 
 test/uatsummary
 
+<<<<<<< HEAD
 *.go~
 *.js~
 .DS_Store
+=======
+.DS_Store
+
+>>>>>>> upstream/master

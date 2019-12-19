@@ -11,11 +11,11 @@ $(if $(GOROOT),,$(error GOROOT is not set!))
 endif
 
 all:
-	make ahrs_approx xdump978 xdump1090 xgen_gdl90 $(PLATFORMDEPENDENT)
+	make xdump978 xdump1090 xgen_gdl90 $(PLATFORMDEPENDENT)
 
 xgen_gdl90:
 	go get -t -d -v ./main ./godump978 ./uatparse ./sensors
-	go build $(BUILDINFO) -p 4 main/gen_gdl90.go main/traffic.go main/gps.go main/network.go main/managementinterface.go main/sdr.go main/ping.go main/uibroadcast.go main/monotonic.go main/datalog.go main/equations.go main/sensors.go main/cputemp.go
+	go build $(BUILDINFO) -p 4 main/gen_gdl90.go main/traffic.go main/gps.go main/network.go main/managementinterface.go main/sdr.go main/ping.go main/uibroadcast.go main/monotonic.go main/datalog.go main/equations.go main/sensors.go main/cputemp.go main/lowpower_uat.go
 
 fancontrol:
 	go get -t -d -v ./main
@@ -28,9 +28,6 @@ xdump1090:
 xdump978:
 	cd dump978 && make lib
 	sudo cp -f ./libdump978.so /usr/lib/libdump978.so
-
-ahrs_approx:
-	go build $(BUILDINFO) -p 4 test-data/ahrs/ahrs_approx.go
 
 .PHONY: test
 test:

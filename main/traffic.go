@@ -223,7 +223,7 @@ func sendTrafficUpdates() {
 				if globalSettings.DEBUG {
 					log.Printf("Ownship target detected for code %X\n", code)
 				}
-				//				OwnshipTrafficInfo = ti
+				OwnshipTrafficInfo = ti
 			} else {
 				cur_n := len(msgs) - 1
 				if len(msgs[cur_n]) >= 35 {
@@ -685,6 +685,26 @@ func parseDownlinkReport(s string, signalLevel int) {
 		track = uint16((raw_track & 0x1ff) * 360 / 512)
 
 		// Dimensions of vehicle - skip.
+	}
+
+	if msg_type == 1 || msg_type == 2 || msg_type == 5 || msg_type == 6 {
+		// Read AUXSV.
+		raw_alt := (int32(frame[29]) << 4) | ((int32(frame[30]) & 0xf0) >> 4)
+		if raw_alt != 0 {
+			alt := ((raw_alt - 1) * 25) - 1000
+			if ti.AltIsGNSS {
+				// Current ti.Alt is GNSS. Swap it for the AUXSV alt, which is baro.
+				baro_alt := ti.Alt
+				ti.Alt = alt
+				alt = baro_alt
+				ti.AltIsGNSS = false
+			}
+
+			ti.GnssDiffFromBaroAlt = alt - ti.Alt
+			ti.Last_GnssDiff = stratuxClock.Time
+			ti.Last_GnssDiffAlt = ti.Alt
+
+		}
 	}
 
 	ti.Track = track
@@ -1164,10 +1184,12 @@ func updateDemoTraffic(icao uint32, tail string, relAlt float32, gs float64, off
 				but are not used for aicraft on the civil registry. These could be
 				military, other public aircraft, or future use.
 
-
 				Values between C0CDF9 - C3FFFF are allocated to Canada,
 				but are not used for aicraft on the civil registry. These could be
 				military, other public aircraft, or future use.
+
+				Values between 7C0000 - 7FFFFF are allocated to Australia.
+
 
 			Output:
 				string: String containing the decoded tail number (if decoding succeeded),
@@ -1189,9 +1211,11 @@ func icao2reg(icao_addr uint32) (string, bool) {
 		nation = "US"
 	} else if (icao_addr >= 0xC00001) && (icao_addr <= 0xC3FFFF) {
 		nation = "CA"
+	} else if (icao_addr >= 0x7C0000) && (icao_addr <= 0x7FFFFF) {
+		nation = "AU"
 	} else {
 		//TODO: future national decoding.
-		return "NON-NA", false
+		return "OTHER", false
 	}
 
 	if nation == "CA" { // Canada decoding
@@ -1220,6 +1244,29 @@ func icao2reg(icao_addr uint32) (string, bool) {
 
 		//fmt.Printf("B = %d, C = %d, D = %d, E = %d\n",b,c,d,e)
 		tail = fmt.Sprintf("C-%c%c%c%c", b_str[b], c+65, d+65, e+65)
+	}
+
+	if nation == "AU" { // Australia decoding
+
+		nationalOffset := uint32(0x7C0000)
+		offset := (icao_addr - nationalOffset)
+		i1 := offset / 1296
+		offset2 := offset % 1296
+		i2 := offset2 / 36
+		offset3 := offset2 % 36
+		i3 := offset3
+
+		var a_char, b_char, c_char string
+
+		a_char = fmt.Sprintf("%c", i1+65)
+		b_char = fmt.Sprintf("%c", i2+65)
+		c_char = fmt.Sprintf("%c", i3+65)
+
+		if i1 < 0 || i1 > 25 || i2 < 0 || i2 > 25 || i3 < 0 || i3 > 25 {
+			return "OTHER", false
+		}
+
+		tail = "VH-" + a_char + b_char + c_char
 	}
 
 	if nation == "US" { // FAA decoding
